@@ -4177,7 +4177,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	unsigned long addr;
 	pte_t *pte;
 	gfp_t gfp;
-	int order=3;
+	int order;
 
 	/*
 	 * If uffd is active for the vma we need per-page fault fidelity to
@@ -4207,7 +4207,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	 * pte_none(). Note that all remaining orders will be completely
 	 * pte_none().
 	 */
-/*
+
 	order = highest_order(orders);
 	while (orders) {
 		addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << order);
@@ -4215,7 +4215,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 			break;
 		order = next_order(&orders, order);
 	}
-*/
+
 	pte_unmap(pte);
 
 	/* Try allocating the highest of the remaining orders. */
@@ -4227,7 +4227,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 			clear_huge_page(&folio->page, vmf->address, 1 << order);
 			return folio;
 		}
-//		order = next_order(&orders, order);
+		order = next_order(&orders, order);
 	}
 
 fallback:
