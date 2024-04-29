@@ -4222,7 +4222,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	gfp = vma_thp_gfp_mask(vma);
 	while (orders) {
 		addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << order);
-		folio = vma_alloc_folio(gfp, 5, vma, addr, true);
+		folio = vma_alloc_folio(gfp, order, vma, addr, true);
 		if (folio) {
 			clear_huge_page(&folio->page, vmf->address, 1 << order);
 			return folio;
