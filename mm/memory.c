@@ -4179,6 +4179,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	gfp_t gfp;
 	int order;
 
+	//printk(KERN_WARNING "Entered alloc_anon_folio\n");
 	/*
 	 * If uffd is active for the vma we need per-page fault fidelity to
 	 * maintain the uffd semantics.
@@ -4225,6 +4226,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 		folio = vma_alloc_folio(gfp, order, vma, addr, true);
 		if (folio) {
 			clear_huge_page(&folio->page, vmf->address, 1 << order);
+			printk(KERN_WARNING "Used folio of  order: %d\n", order);
 			return folio;
 		}
 		order = next_order(&orders, order);
