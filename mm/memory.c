@@ -4227,7 +4227,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 		// count number of alloced pages to understand which folios have been allocated
 		// therefore align address down to PMD alignment -> get to start of pagetable
 		addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << 9);
-		u64 allocations = pte_range_count(pte_index(addr), 1 << 9);
+		int allocations = pte_range_count(pte, 1 << 9);
 
 		// if the number of allocated pages is not a power of 2, it means
 		// that some base pages got allocated and alignment is not given
