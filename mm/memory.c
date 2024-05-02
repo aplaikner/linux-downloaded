@@ -4156,6 +4156,18 @@ out_release:
 	return ret;
 }
 
+static int pte_range_count(pte_t *pte, int nr_pages) {
+	int i;
+
+	for (i = 0; i < nr_pages; i++) {
+		if (!pte_none(ptep_get_lockless(pte + i)))
+			i++;
+	}
+
+	return i;
+
+}
+
 static bool pte_range_none(pte_t *pte, int nr_pages)
 {
 	int i;
@@ -4235,7 +4247,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 				if (folio) {
 					if (mem_cgroup_charge(folio, vma->vm_mm, gfp)) {
 						folio_put(folio);
-						goto next;
+						goto skip;
 					}
 					printk(KERN_WARNING "IT WORKEEEEEED\n");
 					folio_throttle_swaprate(folio, gfp);
@@ -4247,7 +4259,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	}
 	/////////////////////////////
 
-
+skip:
 	/*
 	 * Find the highest order where the aligned range is completely
 	 * pte_none(). Note that all remaining orders will be completely
