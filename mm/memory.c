@@ -4187,6 +4187,10 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	if (unlikely(userfaultfd_armed(vma)))
 		goto fallback;
 
+    if(vma->vm_flags & VM_DYNAMICTHP) {
+			printk(KERN_WARNING "STACK STACK STACK\n");
+    }
+
 	/*
 	 * Get a list of all the (large) orders below PMD_ORDER that are enabled
 	 * for this vma. Then filter out the orders that can't be allocated over
