@@ -4180,6 +4180,7 @@ static bool pte_range_none(pte_t *pte, int nr_pages)
 	return true;
 }
 
+
 static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 {
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
@@ -4200,7 +4201,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 		goto fallback;
 
     if(vma->vm_flags & VM_DYNAMICTHP) {
-			printk(KERN_WARNING "STACK STACK STACK\n");
+			printk(KERN_WARNING "Flag VM_DYNAMICTHP has been set\n");
     }
 
 	/*
@@ -4226,7 +4227,6 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	if(vma->vm_flags & VM_DYNAMICTHP) {
 		// count number of alloced pages to understand which folios have been allocated
 		// therefore align address down to PMD alignment -> get to start of pagetable
-		addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << 9);
 		int allocations = pte_range_count(pte, 1 << 9);
 
 		// if the number of allocated pages is not a power of 2, it means
@@ -4239,7 +4239,15 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 			} else {
 				// get the order from how many pages were allocated
 				order = __ilog2_u64(allocations);
-
+                if(thp_vma_suitable_order(vma, addr, order))  {
+                    printk(KERN_WARNING "Order not suitable! %d\n", order);
+                    goto skip;
+                }
+                addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << order);
+		        if (pte_range_none(pte + pte_index(addr), 1 << order)) {
+                    printk(KERN_WARNING "Page range for order %d not empty!\n", order);
+                    goto skip;
+                }
 				pte_unmap(pte);
 				gfp = vma_thp_gfp_mask(vma);
 				addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << order);
@@ -4249,7 +4257,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 						folio_put(folio);
 						goto skip;
 					}
-					printk(KERN_WARNING "IT WORKEEEEEED\n");
+					printk(KERN_WARNING "(MY CODE) Folio has been allocated with order: %d\n", order);
 					folio_throttle_swaprate(folio, gfp);
 					clear_huge_page(&folio->page, vmf->address, 1 << order);
 					return folio;
@@ -4258,7 +4266,6 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 		}
 	}
 	/////////////////////////////
-
 skip:
 	/*
 	 * Find the highest order where the aligned range is completely
@@ -4283,7 +4290,7 @@ skip:
 		folio = vma_alloc_folio(gfp, order, vma, addr, true);
 		if (folio) {
 			clear_huge_page(&folio->page, vmf->address, 1 << order);
-			printk(KERN_WARNING "Used folio of  order: %d\n", order);
+			printk(KERN_WARNING "(NOT MY CODE) Used folio of  order: %d\n", order);
 			return folio;
 		}
 		order = next_order(&orders, order);
