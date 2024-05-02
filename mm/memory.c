@@ -4207,6 +4207,47 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	if (!pte)
 		return ERR_PTR(-EAGAIN);
 
+
+	/////////////////////////////
+
+	// only do, if we are in a vma marked by my special flag
+	if(vma->vm_flags & VM_DYNAMICTHP) {
+		// count number of alloced pages to understand which folios have been allocated
+		// therefore align address down to PMD alignment -> get to start of pagetable
+		addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << 9);
+		u64 allocations = pte_range_count(pte_index(addr), 1 << 9);
+
+		// if the number of allocated pages is not a power of 2, it means
+		// that some base pages got allocated and alignment is not given
+		// therefore skip our computation and let kernel handle the rest
+		if (is_power_of_2(allocations)) {
+			// if no page has been allocated, put a 16KiB page there
+			if (allocations == 0) {
+				order = 2;
+			} else {
+				// get the order from how many pages were allocated
+				order = __ilog2_u64(allocations);
+
+				pte_unmap(pte);
+				gfp = vma_thp_gfp_mask(vma);
+				addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << order);
+				folio = vma_alloc_folio(gfp, order, vma, addr, true);
+				if (folio) {
+					if (mem_cgroup_charge(folio, vma->vm_mm, gfp)) {
+						folio_put(folio);
+						goto next;
+					}
+					printk(KERN_WARNING "IT WORKEEEEEED\n");
+					folio_throttle_swaprate(folio, gfp);
+					clear_huge_page(&folio->page, vmf->address, 1 << order);
+					return folio;
+				}
+			}
+		}
+	}
+	/////////////////////////////
+
+
 	/*
 	 * Find the highest order where the aligned range is completely
 	 * pte_none(). Note that all remaining orders will be completely
