@@ -1,8 +1,9 @@
 #!/bin/bash
 
-make -j8 && make modules -j8 && make modules_install -j8 -s && cp -v arch/x86_64/boot/bzImage /boot/vmlinuz-linuxNEW
+make -j8 CC="ccache gcc" && make modules -j8 && make modules_install -j8 -s && cp -v arch/x86_64/boot/bzImage /boot/vmlinuz-linuxNEW
 #make -j8 && cp -v arch/x86_64/boot/bzImage /boot/vmlinuz-linuxNEW
 mkinitcpio -p linuxNEW
+grub-mkconfig -o /boot/grub/grub.cfg
 #reboot now
 shutdown now
 
