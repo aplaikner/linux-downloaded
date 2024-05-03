@@ -4231,7 +4231,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 		// if the number of allocated pages is not a power of 2, it means
 		// that some base pages got allocated and alignment is not given
 		// therefore skip our computation and let kernel handle the rest
-		if (is_power_of_2(allocations)) {
+		if (is_power_of_2(allocations) || allocations==0) {
 			printk(KERN_WARNING "Power of 2 allocation count\n");
 			// if no page has been allocated, put a 16KiB page there
 			if (allocations == 0) {
@@ -4245,7 +4245,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
                     goto skip;
                 }
                 addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << order);
-		        if (pte_range_none(pte + pte_index(addr), 1 << order)) {
+		if (!pte_range_none(pte + pte_index(addr), 1 << order)) {
                     printk(KERN_WARNING "Page range for order %d not empty!\n", order);
                     goto skip;
                 }
