@@ -4171,10 +4171,14 @@ static int pte_range_count(pte_t *pte, int nr_pages) {
 static bool pte_range_none(pte_t *pte, int nr_pages)
 {
 	int i;
+	
+	printk(KERN_WARNING "Checking %d pages if empty\n", nr_pages);
 
 	for (i = 0; i < nr_pages; i++) {
-		if (!pte_none(ptep_get_lockless(pte + i)))
+		if (!pte_none(ptep_get_lockless(pte + i))){
+			printk(KERN_WARNING "Failed on index %d\n", i);
 			return false;
+		}
 	}
 
 	return true;
