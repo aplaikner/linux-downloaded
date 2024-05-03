@@ -51,7 +51,6 @@
 		| MAP_POPULATE \
 		| MAP_NONBLOCK \
 		| MAP_STACK \
-		| MAP_TESTING \
 		| MAP_HUGETLB \
 		| MAP_32BIT \
 		| MAP_ABOVE4G \
@@ -160,7 +159,7 @@ calc_vm_flag_bits(unsigned long flags)
 	       _calc_vm_trans(flags, MAP_STACK,      VM_DYNAMICTHP) |
 	       arch_calc_vm_flag_bits(flags);
 }
-       	       //_calc_vm_trans(flags, MAP_STACK,	     VM_NOHUGEPAGE) |
+       	   //_calc_vm_trans(flags, MAP_STACK,	     VM_NOHUGEPAGE) |
 unsigned long vm_commit_limit(void);
 
 #ifndef arch_memory_deny_write_exec_supported
