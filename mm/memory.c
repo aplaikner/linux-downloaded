@@ -4157,14 +4157,14 @@ out_release:
 }
 
 static int pte_range_count(pte_t *pte, int nr_pages) {
-	int i;
+	int counter;
 
 	for (i = 0; i < nr_pages; i++) {
 		if (!pte_none(ptep_get_lockless(pte + i)))
-			i++;
+			counter++;
 	}
 
-	return i;
+	return counter;
 
 }
 
@@ -4200,9 +4200,6 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	if (unlikely(userfaultfd_armed(vma)))
 		goto fallback;
 
-    if(vma->vm_flags & VM_DYNAMICTHP) {
-			printk(KERN_WARNING "Flag VM_DYNAMICTHP has been set\n");
-    }
 
 	/*
 	 * Get a list of all the (large) orders below PMD_ORDER that are enabled
@@ -4225,20 +4222,24 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 
 	// only do, if we are in a vma marked by my special flag
 	if(vma->vm_flags & VM_DYNAMICTHP) {
+		//printk(KERN_WARNING "Flag VM_DYNAMICTHP has been set now\n");
 		// count number of alloced pages to understand which folios have been allocated
 		// therefore align address down to PMD alignment -> get to start of pagetable
 		int allocations = pte_range_count(pte, 1 << 9);
+		printk(KERN_WARNING "Currently there are following pages allocated: %d\n", allocations);
 
 		// if the number of allocated pages is not a power of 2, it means
 		// that some base pages got allocated and alignment is not given
 		// therefore skip our computation and let kernel handle the rest
 		if (is_power_of_2(allocations)) {
+			printk(KERN_WARNING "Power of 2 allocation count\n");
 			// if no page has been allocated, put a 16KiB page there
 			if (allocations == 0) {
 				order = 2;
 			} else {
 				// get the order from how many pages were allocated
 				order = __ilog2_u64(allocations);
+			}
                 if(thp_vma_suitable_order(vma, addr, order))  {
                     printk(KERN_WARNING "Order not suitable! %d\n", order);
                     goto skip;
@@ -4255,6 +4256,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 				if (folio) {
 					if (mem_cgroup_charge(folio, vma->vm_mm, gfp)) {
 						folio_put(folio);
+						printk(KERN_WARNING "Mem cgroup if, none of my folios allocated\n");
 						goto skip;
 					}
 					printk(KERN_WARNING "(MY CODE) Folio has been allocated with order: %d\n", order);
@@ -4262,7 +4264,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 					clear_huge_page(&folio->page, vmf->address, 1 << order);
 					return folio;
 				}
-			}
+			
 		}
 	}
 	/////////////////////////////
