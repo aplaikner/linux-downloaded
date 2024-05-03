@@ -4216,8 +4216,6 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	pte = pte_offset_map(vmf->pmd, vmf->address & PMD_MASK);
 	if (!pte)
 		return ERR_PTR(-EAGAIN);
-
-
 	/////////////////////////////
 
 	// only do, if we are in a vma marked by my special flag
@@ -4227,6 +4225,9 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 		// therefore align address down to PMD alignment -> get to start of pagetable
 		int allocations = pte_range_count(pte, 1 << 9);
 		printk(KERN_WARNING "Currently there are following pages allocated: %d\n", allocations);
+		
+		//if(allocations == 0) goto fallback;
+		//allocations--;
 
 		// if the number of allocated pages is not a power of 2, it means
 		// that some base pages got allocated and alignment is not given
@@ -4239,18 +4240,28 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 			} else {
 				// get the order from how many pages were allocated
 				order = __ilog2_u64(allocations);
+				printk(KERN_WARNING "From %d allocations the order %d was calculated", allocations, order);
 			}
-		
+		if(ALIGN_DOWN(vmf->address, PAGE_SIZE << order) < vma->vm_start) {
+				printk(KERN_WARNING "Smaller than vma start");
+                    		goto skip;
+		}
+		if(ALIGN_DOWN(vmf->address, PAGE_SIZE << order) + (4096<< order) > vma->vm_end) {
+				printk(KERN_WARNING "Bigger than vma end");
+                    		goto skip;
+		}
+		/*
                 if(!thp_vma_suitable_order(vma, addr, order))  {
-                    printk(KERN_WARNING "Order not suitable! %d\n", order);
+                    printk(KERN_WARNING "Order not suitable! %d\nAddress is %ld\nStart is %ld and End is %ld", order,  ALIGN_DOWN(vmf->address, PAGE_SIZE << order), vma->vm_start, vma->vm_end);
                     goto skip;
                 }
+		*/
                 addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << order);
 		if (!pte_range_none(pte + pte_index(addr), 1 << order)) {
                     printk(KERN_WARNING "Page range for order %d not empty!\n", order);
                     goto skip;
                 }
-				pte_unmap(pte);
+		pte_unmap(pte);
 				gfp = vma_thp_gfp_mask(vma);
 				addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << order);
 				folio = vma_alloc_folio(gfp, order, vma, addr, true);
