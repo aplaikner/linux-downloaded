@@ -4240,7 +4240,8 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 				// get the order from how many pages were allocated
 				order = __ilog2_u64(allocations);
 			}
-                if(thp_vma_suitable_order(vma, addr, order))  {
+		
+                if(!thp_vma_suitable_order(vma, addr, order))  {
                     printk(KERN_WARNING "Order not suitable! %d\n", order);
                     goto skip;
                 }
