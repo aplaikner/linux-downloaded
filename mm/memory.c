@@ -4159,7 +4159,7 @@ out_release:
 static int pte_range_count(pte_t *pte, int nr_pages) {
 	int counter;
 
-	for (i = 0; i < nr_pages; i++) {
+	for (int i = 0; i < nr_pages; i++) {
 		if (!pte_none(ptep_get_lockless(pte + i)))
 			counter++;
 	}
