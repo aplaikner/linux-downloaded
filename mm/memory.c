@@ -4172,19 +4172,14 @@ static bool pte_range_none(pte_t *pte, int nr_pages)
 {
 	int i;
 	
-	printk(KERN_WARNING "Checking %d pages if empty\n", nr_pages);
-
 	for (i = 0; i < nr_pages; i++) {
 		if (!pte_none(ptep_get_lockless(pte + i))){
-			printk(KERN_WARNING "Failed on index %d\n", i);
 			return false;
 		}
 	}
 
 	return true;
 }
-
-
 static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 {
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
@@ -4204,7 +4199,6 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	if (unlikely(userfaultfd_armed(vma)))
 		goto fallback;
 
-
 	/*
 	 * Get a list of all the (large) orders below PMD_ORDER that are enabled
 	 * for this vma. Then filter out the orders that can't be allocated over
@@ -4222,67 +4216,64 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 		return ERR_PTR(-EAGAIN);
 	/////////////////////////////
 
-	// only do, if we are in a vma marked by my special flag
-	if(vma->vm_flags & VM_DYNAMICTHP) {
-		//printk(KERN_WARNING "Flag VM_DYNAMICTHP has been set now\n");
-		// count number of alloced pages to understand which folios have been allocated
-		// therefore align address down to PMD alignment -> get to start of pagetable
-		int allocations = pte_range_count(pte, 1 << 9);
-		printk(KERN_WARNING "Currently there are following pages allocated: %d\n", allocations);
-		
-		//if(allocations == 0) goto fallback;
-		//allocations--;
+	// try to align address to next 2MB boundary -> currently not working correctly maybe because of that
 
-		// if the number of allocated pages is not a power of 2, it means
-		// that some base pages got allocated and alignment is not given
-		// therefore skip our computation and let kernel handle the rest
-		if (is_power_of_2(allocations) || allocations==0) {
-			printk(KERN_WARNING "Power of 2 allocation count\n");
-			// if no page has been allocated, put a 16KiB page there
-			if (allocations == 0) {
-				order = 2;
-			} else {
-				// get the order from how many pages were allocated
-				order = __ilog2_u64(allocations);
-				printk(KERN_WARNING "From %d allocations the order %d was calculated", allocations, order);
-			}
-		if(ALIGN_DOWN(vmf->address, PAGE_SIZE << order) < vma->vm_start) {
-				printk(KERN_WARNING "Smaller than vma start");
-                    		goto skip;
-		}
-		if(ALIGN_DOWN(vmf->address, PAGE_SIZE << order) + (4096<< order) > vma->vm_end) {
-				printk(KERN_WARNING "Bigger than vma end");
-                    		goto skip;
-		}
-		/*
-                if(!thp_vma_suitable_order(vma, addr, order))  {
-                    printk(KERN_WARNING "Order not suitable! %d\nAddress is %ld\nStart is %ld and End is %ld", order,  ALIGN_DOWN(vmf->address, PAGE_SIZE << order), vma->vm_start, vma->vm_end);
-                    goto skip;
-                }
-		*/
-                addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << order);
-		if (!pte_range_none(pte + pte_index(addr), 1 << order)) {
-                    printk(KERN_WARNING "Page range for order %d not empty!\n", order);
-                    goto skip;
-                }
-		pte_unmap(pte);
-				gfp = vma_thp_gfp_mask(vma);
-				addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << order);
-				folio = vma_alloc_folio(gfp, order, vma, addr, true);
-				if (folio) {
-					if (mem_cgroup_charge(folio, vma->vm_mm, gfp)) {
-						folio_put(folio);
-						printk(KERN_WARNING "Mem cgroup if, none of my folios allocated\n");
-						goto skip;
-					}
-					printk(KERN_WARNING "(MY CODE) Folio has been allocated with order: %d\n", order);
-					folio_throttle_swaprate(folio, gfp);
-					clear_huge_page(&folio->page, vmf->address, 1 << order);
-					return folio;
+	// only do, if we are in a vma marked by my special flag
+	if (vma->vm_flags & VM_DYNAMICTHP) {
+		if (vmf->address > (vma->vm_end - (PAGE_SIZE << 2))) {
+			order = 2;
+		} else {
+			for (int i = 3; i <= 9; i++) {
+				if (vmf->address > (vma->vm_end - (PAGE_SIZE << i))) {
+					order = i - 1;
+					break;
 				}
-			
+			}
+		}
+
+		printk(KERN_WARNING "Chosen order: %d\n", order);
+		unsigned long upper_end = ALIGN(vmf->address, PAGE_SIZE << order);
+		unsigned long lower_end = upper_end - (PAGE_SIZE << order);
+		printk(KERN_WARNING "Upper:%ld\n", upper_end);
+		printk(KERN_WARNING "Lower:%ld\n", lower_end);
+		if(!IS_ALIGNED(lower_end, (PAGE_SIZE << order))) {
+			printk(KERN_WARNING "Not aligned!\n");
+		}
+
+		if (upper_end > vma->vm_end) {
+			printk(KERN_WARNING "Bigger than upper end\n");
+			goto skip;
+		}
+		if (lower_end < vma->vm_start) {
+			printk(KERN_WARNING "Smaller than lower end\n");
+			goto skip;
+		}
+		
+		if (!pte_range_none(pte + pte_index(lower_end), 1 << order)) {
+			printk(KERN_WARNING "Page range for order %d not empty!\n",order);
+			goto skip;
+		}
+	
+		pte_unmap(pte);
+		gfp = vma_thp_gfp_mask(vma);
+		addr = lower_end;
+		folio = vma_alloc_folio(gfp, order, vma, addr, true);
+		if (folio) {
+			if (mem_cgroup_charge(folio, vma->vm_mm, gfp)) {
+				folio_put(folio);
+				printk(KERN_WARNING
+				       "Mem cgroup if, none of my folios allocated\n");
+				goto skip;
+			}
+			printk(KERN_WARNING
+			       "(MY CODE) Folio has been allocated with order: %d\n",
+			       order);
+			folio_throttle_swaprate(folio, gfp);
+			clear_huge_page(&folio->page, vmf->address, 1 << order);
+			return folio;
 		}
 	}
+
 	/////////////////////////////
 skip:
 	/*
@@ -4308,7 +4299,9 @@ skip:
 		folio = vma_alloc_folio(gfp, order, vma, addr, true);
 		if (folio) {
 			clear_huge_page(&folio->page, vmf->address, 1 << order);
-			printk(KERN_WARNING "(NOT MY CODE) Used folio of  order: %d\n", order);
+			printk(KERN_WARNING
+			       "(NOT MY CODE) Used folio of  order: %d\n",
+			       order);
 			return folio;
 		}
 		order = next_order(&orders, order);
