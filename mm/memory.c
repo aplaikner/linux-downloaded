@@ -4220,11 +4220,14 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 
 	// only do, if we are in a vma marked by my special flag
 	if (vma->vm_flags & VM_DYNAMICTHP) {
-		if (vmf->address > (vma->vm_end - (PAGE_SIZE << 2))) {
+		unsigned long real_vma_end = ALIGN(vma->vm_end, PAGE_SIZE << 9);
+		unsigned long real_vma_start = ALIGN_DOWN(vma->vm_end-(IS_ALIGNED(vma->vm_end, (PAGE_SIZE << 9))?1:0), PAGE_SIZE << 9);
+
+		if (vmf->address > (real_vma_end - (PAGE_SIZE << 2))) {
 			order = 2;
 		} else {
 			for (int i = 3; i <= 9; i++) {
-				if (vmf->address > (vma->vm_end - (PAGE_SIZE << i))) {
+				if (vmf->address > (real_vma_end - (PAGE_SIZE << i))) {
 					order = i - 1;
 					break;
 				}
@@ -4234,8 +4237,14 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 		printk(KERN_WARNING "Chosen order: %d\n", order);
 		unsigned long upper_end = ALIGN(vmf->address, PAGE_SIZE << order);
 		unsigned long lower_end = upper_end - (PAGE_SIZE << order);
-		printk(KERN_WARNING "Upper:%ld\n", upper_end);
-		printk(KERN_WARNING "Lower:%ld\n", lower_end);
+		printk(KERN_WARNING "Faulting address:0x%lx\n", vmf->address);
+		printk(KERN_WARNING "Upper:0x%lx\n", upper_end);
+		printk(KERN_WARNING "Lower:0x%lx\n", lower_end);
+		printk(KERN_WARNING "PMD range upper:0x%lx\n", real_vma_end);
+		printk(KERN_WARNING "PMD range lower:0x%lx\n", real_vma_start);
+		printk(KERN_WARNING "vma range upper:0x%lx\n", vma->vm_end);
+		printk(KERN_WARNING "vma range lower:0x%lx\n", vma->vm_start);
+	
 		if(!IS_ALIGNED(lower_end, (PAGE_SIZE << order))) {
 			printk(KERN_WARNING "Not aligned!\n");
 		}
