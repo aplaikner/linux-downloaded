@@ -4227,18 +4227,18 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 		unsigned long pmd_block_start = ALIGN_DOWN(vmf->address-(IS_ALIGNED(vmf->address, (PAGE_SIZE << 9))?1:0), PAGE_SIZE << 9);
 
 
-		if (vmf->address > (pmd_block_end - (PAGE_SIZE << 2))) {
+		if (vmf->address >= (pmd_block_end - (PAGE_SIZE << 2))) {
 			order = 2;
 		} else {
 			for (int i = 3; i <= 9; i++) {
-				if (vmf->address > (pmd_block_end - (PAGE_SIZE << i))) {
+				if (vmf->address >= (pmd_block_end - (PAGE_SIZE << i))) {
 					order = i - 1;
 					break;
 				}
 			}
 		}
 
-		unsigned long upper_end = ALIGN(vmf->address, PAGE_SIZE << order);
+		unsigned long upper_end = ALIGN(vmf->address+(IS_ALIGNED(vmf->address, (PAGE_SIZE << order))?1:0), PAGE_SIZE << order);
 		unsigned long lower_end = upper_end - (PAGE_SIZE << order);
 		printk(KERN_WARNING "Chosen order:%d\n", order);
 		printk(KERN_WARNING "Faulting address:0x%lx\n", vmf->address);
@@ -4262,14 +4262,14 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 			goto skip;
 		}
 		
-		if (!pte_range_none(pte + pte_index(lower_end+1), 1 << order)) {
+		if (!pte_range_none(pte + pte_index(lower_end), 1 << order)) {
 			printk(KERN_WARNING "Page range for order %d not empty!\n",order);
 			goto skip;
 		}
 	
 		pte_unmap(pte);
 		gfp = vma_thp_gfp_mask(vma);
-		addr = lower_end+1;
+		addr = lower_end;
 		folio = vma_alloc_folio(gfp, order, vma, addr, true);
 		if (folio) {
 			if (mem_cgroup_charge(folio, vma->vm_mm, gfp)) {
