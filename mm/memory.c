@@ -4191,7 +4191,6 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	gfp_t gfp;
 	int order;
 
-	//printk(KERN_WARNING "Entered alloc_anon_folio\n");
 	/*
 	 * If uffd is active for the vma we need per-page fault fidelity to
 	 * maintain the uffd semantics.
@@ -4218,10 +4217,24 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 
 	// only do, if we are in a vma marked by my special flag
 	if (vma->vm_flags & VM_DYNAMICTHP) {
-		/*
-		unsigned long real_vma_end = ALIGN(vma->vm_end, PAGE_SIZE << 9);
-		unsigned long real_vma_start = ALIGN_DOWN(vma->vm_end-(IS_ALIGNED(vma->vm_end, (PAGE_SIZE << 9))?1:0), PAGE_SIZE << 9);
-		*/
+		#ifdef REVERSE
+		unsigned long pmd_block_end = ALIGN(vmf->address+(IS_ALIGNED(vmf->address, (PAGE_SIZE << 9))?1:0), PAGE_SIZE << 9);
+		unsigned long pmd_block_start = ALIGN_DOWN(vmf->address, PAGE_SIZE << 9);
+
+		if (vmf->address < (pmd_block_start + (PAGE_SIZE << 2))) {
+			order = 2;
+		} else {
+			for (int i = 3; i <= 9; i++) {
+				if (vmf->address < (pmd_block_start + (PAGE_SIZE << i))) {
+					order = i - 1;
+					break;
+				}
+			}
+		}
+
+		unsigned long lower_end = ALIGN_DOWN(vmf->address, PAGE_SIZE<<order); 
+		unsigned long upper_end = lower_end + (PAGE_SIZE << order);
+		#else
 
 		unsigned long pmd_block_end = ALIGN(vmf->address, PAGE_SIZE << 9);
 		unsigned long pmd_block_start = ALIGN_DOWN(vmf->address-(IS_ALIGNED(vmf->address, (PAGE_SIZE << 9))?1:0), PAGE_SIZE << 9);
@@ -4240,6 +4253,9 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 
 		unsigned long upper_end = ALIGN(vmf->address+(IS_ALIGNED(vmf->address, (PAGE_SIZE << order))?1:0), PAGE_SIZE << order);
 		unsigned long lower_end = upper_end - (PAGE_SIZE << order);
+		
+		#endif
+
 		printk(KERN_WARNING "Chosen order:%d\n", order);
 		printk(KERN_WARNING "Faulting address:0x%lx\n", vmf->address);
 		printk(KERN_WARNING "Upper:0x%lx\n", upper_end);
