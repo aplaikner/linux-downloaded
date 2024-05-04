@@ -4216,37 +4216,41 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 		return ERR_PTR(-EAGAIN);
 	/////////////////////////////
 
-	// try to align address to next 2MB boundary -> currently not working correctly maybe because of that
-
 	// only do, if we are in a vma marked by my special flag
 	if (vma->vm_flags & VM_DYNAMICTHP) {
+		/*
 		unsigned long real_vma_end = ALIGN(vma->vm_end, PAGE_SIZE << 9);
 		unsigned long real_vma_start = ALIGN_DOWN(vma->vm_end-(IS_ALIGNED(vma->vm_end, (PAGE_SIZE << 9))?1:0), PAGE_SIZE << 9);
+		*/
 
-		if (vmf->address > (real_vma_end - (PAGE_SIZE << 2))) {
+		unsigned long pmd_block_end = ALIGN(vmf->address, PAGE_SIZE << 9);
+		unsigned long pmd_block_start = ALIGN_DOWN(vmf->address-(IS_ALIGNED(vmf->address, (PAGE_SIZE << 9))?1:0), PAGE_SIZE << 9);
+
+
+		if (vmf->address > (pmd_block_end - (PAGE_SIZE << 2))) {
 			order = 2;
 		} else {
 			for (int i = 3; i <= 9; i++) {
-				if (vmf->address > (real_vma_end - (PAGE_SIZE << i))) {
+				if (vmf->address > (pmd_block_end - (PAGE_SIZE << i))) {
 					order = i - 1;
 					break;
 				}
 			}
 		}
 
-		printk(KERN_WARNING "Chosen order: %d\n", order);
 		unsigned long upper_end = ALIGN(vmf->address, PAGE_SIZE << order);
 		unsigned long lower_end = upper_end - (PAGE_SIZE << order);
+		printk(KERN_WARNING "Chosen order:%d\n", order);
 		printk(KERN_WARNING "Faulting address:0x%lx\n", vmf->address);
 		printk(KERN_WARNING "Upper:0x%lx\n", upper_end);
 		printk(KERN_WARNING "Lower:0x%lx\n", lower_end);
-		printk(KERN_WARNING "PMD range upper:0x%lx\n", real_vma_end);
-		printk(KERN_WARNING "PMD range lower:0x%lx\n", real_vma_start);
+		printk(KERN_WARNING "PMD range upper:0x%lx\n", pmd_block_end);
+		printk(KERN_WARNING "PMD range lower:0x%lx\n", pmd_block_start);
 		printk(KERN_WARNING "vma range upper:0x%lx\n", vma->vm_end);
 		printk(KERN_WARNING "vma range lower:0x%lx\n", vma->vm_start);
 	
 		if(!IS_ALIGNED(lower_end, (PAGE_SIZE << order))) {
-			printk(KERN_WARNING "Not aligned!\n");
+			printk(KERN_WARNING "Lower end not aligned to order!\n");
 		}
 
 		if (upper_end > vma->vm_end) {
@@ -4258,14 +4262,14 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 			goto skip;
 		}
 		
-		if (!pte_range_none(pte + pte_index(lower_end), 1 << order)) {
+		if (!pte_range_none(pte + pte_index(lower_end+1), 1 << order)) {
 			printk(KERN_WARNING "Page range for order %d not empty!\n",order);
 			goto skip;
 		}
 	
 		pte_unmap(pte);
 		gfp = vma_thp_gfp_mask(vma);
-		addr = lower_end;
+		addr = lower_end+1;
 		folio = vma_alloc_folio(gfp, order, vma, addr, true);
 		if (folio) {
 			if (mem_cgroup_charge(folio, vma->vm_mm, gfp)) {
@@ -4275,7 +4279,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 				goto skip;
 			}
 			printk(KERN_WARNING
-			       "(MY CODE) Folio has been allocated with order: %d\n",
+			       "(MY CODE) Folio has been allocated with order:%d\n",
 			       order);
 			folio_throttle_swaprate(folio, gfp);
 			clear_huge_page(&folio->page, vmf->address, 1 << order);
