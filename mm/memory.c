@@ -4202,7 +4202,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	if (!pte)
 		return ERR_PTR(-EAGAIN);
 	/////////////////////////////
-	if (vma->vm_flags & VM_SMARTSTACK && vmf->address >= ((ALIGN(vmf->address, PMD_ORDER) - (PAGE_SIZE << 2)))) {
+	if (vma->vm_flags & VM_SMARTSTACK && vmf->address >= ((ALIGN(vma->vm_end, PMD_ORDER) - (PAGE_SIZE << 2)))) {
 		order = 2;
 		pte_unmap(pte);
 		gfp = vma_thp_gfp_mask(vma);
