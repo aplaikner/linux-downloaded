@@ -4207,6 +4207,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 		pte_unmap(pte);
 		gfp = vma_thp_gfp_mask(vma);
 		addr = ALIGN_DOWN(vmf->address, order);;
+		printk(KERN_WARNING "Allocated first page in stack as order 2 successfully\n");
 		goto first;
 	}
 	/////////////////////////////
@@ -4237,7 +4238,7 @@ first:
 				goto next;
 			}
 			if (vma->vm_flags & VM_SMARTSTACK) {
-				printk(KERN_WARNING "NOT MY CODE: Used folio of order: %d\n", order);
+				printk(KERN_WARNING "Used folio of order: %d\n", order);
 			}
 			folio_throttle_swaprate(folio, gfp);
 			clear_huge_page(&folio->page, vmf->address, 1 << order);
@@ -5294,10 +5295,13 @@ retry_pud:
 		// Only if in first pmd block, do pte handling
 		if ((vm_flags & VM_SMARTSTACK) && vmf.address >= ALIGN_DOWN(vma->vm_end, PMD_SIZE) - PMD_SIZE) {
 			return handle_pte_fault(&vmf);
-		}
+		}		
+
 		ret = create_huge_pmd(&vmf);
-		if (!(ret & VM_FAULT_FALLBACK))
+		if (!(ret & VM_FAULT_FALLBACK)) {
+			printk(KERN_WARNING "Allocated PMD-sized page for VM_SMARTSTACK range\n");
 			return ret;
+		}
 	} else {
 		vmf.orig_pmd = pmdp_get_lockless(vmf.pmd);
 
