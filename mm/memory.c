@@ -5411,7 +5411,8 @@ retry_pud:
 		 * there are no pages of that size. Therefore, we just allocate
 		 * a PMD sized page again.
 		 */
-		if ((vm_flags & VM_DYNAMICTHP) && (vmf.address >= (ALIGN_DOWN(vma->vm_end, PMD_SIZE) - PMD_SIZE))) {
+		if ((vm_flags & VM_DYNAMICTHP) && (vmf.address >= (ALIGN_DOWN(vma->vm_end, PMD_SIZE) - PMD_SIZE))&&
+				 !thp_vma_suitable_order(vma, vmf.address, PMD_ORDER)) {
 			return handle_pte_fault(&vmf);
 		}
 
