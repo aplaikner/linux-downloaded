@@ -5414,8 +5414,8 @@ retry_pud:
 		 * holding the lowest ptes of the stack, so also were the guard page is,
 		 * we can also enter our pte fault handler 
 		 */
-		if ((vm_flags & VM_DYNAMICTHP) && (vmf.address >= (ALIGN_DOWN(vma->vm_end, PMD_SIZE) - PMD_SIZE)) ||
-				 !thp_vma_suitable_order(vma, vmf.address, PMD_ORDER)) {
+		if ((vm_flags & VM_DYNAMICTHP) && (vmf.address >= (ALIGN_DOWN(vma->vm_end, PMD_SIZE) - PMD_SIZE) ||
+				 !thp_vma_suitable_order(vma, vmf.address, PMD_ORDER))) {
 			return handle_pte_fault(&vmf);
 		}
 
