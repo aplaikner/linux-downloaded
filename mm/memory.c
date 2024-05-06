@@ -5396,6 +5396,25 @@ retry_pud:
 
 	if (pmd_none(*vmf.pmd) &&
 	    thp_vma_allowable_order(vma, vm_flags, false, true, true, PMD_ORDER)) {
+		/*
+		 * If the PF happens in a vma marked by my flag, check if
+		 * the faulting address is below the first PMD sized block, so
+		 * below the first page table. If no, we can handle it with my
+		 * handling code in alloc_anon_folio. If yes, it means, that
+		 * the first PMD-sized block of memory at the beginning of the stack
+		 * has already been written to / reserved through an array declaration.
+		 * Therefore, we continue doubling the previously allocated mTHP.
+		 * Since the mTHP at the end of the last page table was order 8,
+		 * now we can allocate a order 9 page --> PMD page
+		 * If the faulting address is at e.g. the 3rd PMD block (3rd
+		 * page table block for this vma) we cannot allocate 4MiB, since
+		 * there are no pages of that size. Therefore, we just allocate
+		 * a PMD sized page again.
+		 */
+		if (vm_flags & VM_DYNAMICTHP && (!(vmf->address < (ALIGN(vma->vm_end, PMD_SIZE) - PMD_SIZE)))) {
+			return handle_pte_fault(&vmf);
+		}
+		
 		ret = create_huge_pmd(&vmf);
 		if (!(ret & VM_FAULT_FALLBACK))
 			return ret;
