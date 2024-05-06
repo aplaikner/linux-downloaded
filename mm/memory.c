@@ -5414,7 +5414,11 @@ retry_pud:
 		if (vm_flags & VM_DYNAMICTHP && (!(vmf.address < (ALIGN(vma->vm_end, PMD_SIZE) - PMD_SIZE)))) {
 			return handle_pte_fault(&vmf);
 		}
-		
+
+		if (vm_flags & VM_DYNAMICTHP) {
+			printk(KERN_WARNING "Allocated PMD-sized page for VM_DYNAMICTHP range\n");
+		}
+
 		ret = create_huge_pmd(&vmf);
 		if (!(ret & VM_FAULT_FALLBACK))
 			return ret;
