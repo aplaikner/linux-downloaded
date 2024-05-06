@@ -5410,8 +5410,11 @@ retry_pud:
 		 * page table block for this vma) we cannot allocate 4MiB, since
 		 * there are no pages of that size. Therefore, we just allocate
 		 * a PMD sized page again.
+		 * If PMD is not suitable to install, ergo if we are in the pagetable
+		 * holding the lowest ptes of the stack, so also were the guard page is,
+		 * we can also enter our pte fault handler 
 		 */
-		if ((vm_flags & VM_DYNAMICTHP) && (vmf.address >= (ALIGN_DOWN(vma->vm_end, PMD_SIZE) - PMD_SIZE))&&
+		if ((vm_flags & VM_DYNAMICTHP) && (vmf.address >= (ALIGN_DOWN(vma->vm_end, PMD_SIZE) - PMD_SIZE)) ||
 				 !thp_vma_suitable_order(vma, vmf.address, PMD_ORDER)) {
 			return handle_pte_fault(&vmf);
 		}
