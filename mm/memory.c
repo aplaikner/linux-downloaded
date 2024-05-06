@@ -4204,7 +4204,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	/////////////////////////////
 
 	// only do, if we are in a vma marked by my special flag
-	if (vma->vm_flags & VM_DYNAMICTHP) {
+	if (vma->vm_flags & VM_SMARTSTACK) {
 		//#define REVERSE
 		#ifdef REVERSE
 		unsigned long pmd_block_end = ALIGN(vmf->address+(IS_ALIGNED(vmf->address, (PAGE_SIZE << 9))?1:0), PAGE_SIZE << 9);
@@ -4352,7 +4352,7 @@ skip:
 				folio_put(folio);
 				goto next;
 			}
-			if (vma->vm_flags & VM_DYNAMICTHP) {
+			if (vma->vm_flags & VM_SMARTSTACK) {
 				printk(KERN_WARNING "NOT MY CODE: Used folio of order: %d\n", order);
 			}
 			folio_throttle_swaprate(folio, gfp);
@@ -5425,13 +5425,13 @@ retry_pud:
 		 * holding the lowest ptes of the stack, so also were the guard page is,
 		 * we can also enter our pte fault handler 
 		 */
-		if ((vm_flags & VM_DYNAMICTHP) && (vmf.address >= (ALIGN_DOWN(vma->vm_end, PMD_SIZE) - PMD_SIZE) ||
+		if ((vm_flags & VM_SMARTSTACK) && (vmf.address >= (ALIGN_DOWN(vma->vm_end, PMD_SIZE) - PMD_SIZE) ||
 				 !thp_vma_suitable_order(vma, vmf.address, PMD_ORDER))) {
 			return handle_pte_fault(&vmf);
 		}
 
-		if (vm_flags & VM_DYNAMICTHP) {
-			printk(KERN_WARNING "Allocated PMD-sized page for VM_DYNAMICTHP range\n");
+		if (vm_flags & VM_SMARTSTACK) {
+			printk(KERN_WARNING "Allocated PMD-sized page for VM_SMARTSTACK range\n");
 		}
 
 		ret = create_huge_pmd(&vmf);
