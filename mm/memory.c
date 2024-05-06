@@ -4233,8 +4233,19 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 		 * pagetable range after alignment. 
 		 */
 		unsigned long pmd_block_end = ALIGN(vmf->address+(IS_ALIGNED(vmf->address, (PAGE_SIZE << 9))?1:0), PAGE_SIZE << 9);
-		unsigned long pmd_block_start = pmd_block_end + (PAGE_SIZE << 9);
-
+		unsigned long pmd_block_start = pmd_block_end - (PAGE_SIZE << 9);
+	
+		/*
+		 * Switch to greedy & aggressive default linux mTHP allocation method if we are at the end of the stack.
+		 * Being there means, that all of the previously page tables have been filled with data, or at least 
+		 * have been reserved by array declarations. Because of the guard page it is not possible to install a
+		 * final PMD-sized mTHP in this range, therefore let linux install the biggest possible mTHPs
+		 */	
+		if (pmd_block_start < vma->vm_start) {
+			printk(KERN_WARNING "Reached last page table in stack. Falling back to greedy allocation.\n");
+			goto skip;
+		}
+	
 		/*
 		 * Perform order selection. Check if faulting address is in the current mTHP block. The mTHP blocks are ordered
 		 * the following way (from highest address to lowest address in pagetable range): 2 2 3 4 5 6 7 8
