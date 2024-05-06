@@ -4316,9 +4316,9 @@ skip:
 		folio = vma_alloc_folio(gfp, order, vma, addr, true);
 		if (folio) {
 			clear_huge_page(&folio->page, vmf->address, 1 << order);
-			printk(KERN_WARNING
-			       "(NOT MY CODE) Used folio of  order: %d\n",
-			       order);
+			if (vma->vm_flags & VM_DYNAMICTHP) {
+				printk(KERN_WARNING "NOT MY CODE: Used folio of order: %d\n", order);
+			}
 			return folio;
 		}
 		order = next_order(&orders, order);
