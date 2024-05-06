@@ -4337,12 +4337,18 @@ skip:
 		addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << order);
 		folio = vma_alloc_folio(gfp, order, vma, addr, true);
 		if (folio) {
-			clear_huge_page(&folio->page, vmf->address, 1 << order);
+			if (mem_cgroup_charge(folio, vma->vm_mm, gfp)) {
+				folio_put(folio);
+				goto next;
+			}
 			if (vma->vm_flags & VM_DYNAMICTHP) {
 				printk(KERN_WARNING "NOT MY CODE: Used folio of order: %d\n", order);
 			}
+			folio_throttle_swaprate(folio, gfp);
+			clear_huge_page(&folio->page, vmf->address, 1 << order);
 			return folio;
 		}
+next:
 		order = next_order(&orders, order);
 	}
 
