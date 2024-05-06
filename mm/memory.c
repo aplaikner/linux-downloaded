@@ -4225,9 +4225,24 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 		unsigned long upper_end = lower_end + (PAGE_SIZE << order);
 		#else
 
+
+		/*
+		 * Mark out where the PMD block, or rather the current pagetable address range, where the PF happened
+		 * is located. Get the upper end (highest address) and the start (lowest address).
+		 * In case the pagefault happens on a PMD boundary, we add 1 to the faulting address to get the correct
+		 * pagetable range after alignment. 
+		 */
 		unsigned long pmd_block_end = ALIGN(vmf->address+(IS_ALIGNED(vmf->address, (PAGE_SIZE << 9))?1:0), PAGE_SIZE << 9);
 		unsigned long pmd_block_start = pmd_block_end + (PAGE_SIZE << 9);
 
+		/*
+		 * Perform order selection. Check if faulting address is in the current mTHP block. The mTHP blocks are ordered
+		 * the following way (from highest address to lowest address in pagetable range): 2 2 3 4 5 6 7 8
+		 * This means, if a PF happens rather at the beginning of the stack, or of the pagetable range, then a smaller
+		 * mTHP order is chosen. 
+		 * The reason for the >= is, that for PF happening exactly on a mTHP page border between two orders, we want to 
+		 * use the smaller order, which includes the faulting address.
+		 */
 		if (vmf->address >= (pmd_block_end - (PAGE_SIZE << 2))) {
 			order = 2;
 		} else {
@@ -4239,6 +4254,12 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 			}
 		}
 
+		/*
+		 * Calculate upper and lower bounds of the mTHP that is about to be installed.
+		 * Should the faulting address be on a mTHP page border between two order, we previously have chosen the smaller
+		 * order and therefore now also will add 1 to align down to that range. Otherwise we would try to install a smaller
+		 * order page in a range, where the next highest order page would be placed.
+		 */
 		unsigned long upper_end = ALIGN(vmf->address+(IS_ALIGNED(vmf->address, (PAGE_SIZE << order))?1:0), PAGE_SIZE << order);
 		unsigned long lower_end = upper_end - (PAGE_SIZE << order);
 		
@@ -4271,6 +4292,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 			goto skip;
 		}
 	
+		/* This code is taken from below. It installs the mTHP */
 		pte_unmap(pte);
 		gfp = vma_thp_gfp_mask(vma);
 		addr = lower_end;
