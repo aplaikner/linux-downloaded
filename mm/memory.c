@@ -4217,6 +4217,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 
 	// only do, if we are in a vma marked by my special flag
 	if (vma->vm_flags & VM_DYNAMICTHP) {
+		//#define REVERSE
 		#ifdef REVERSE
 		unsigned long pmd_block_end = ALIGN(vmf->address+(IS_ALIGNED(vmf->address, (PAGE_SIZE << 9))?1:0), PAGE_SIZE << 9);
 		unsigned long pmd_block_start = ALIGN_DOWN(vmf->address, PAGE_SIZE << 9);
@@ -4236,8 +4237,29 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 		unsigned long upper_end = lower_end + (PAGE_SIZE << order);
 		#else
 
-		unsigned long pmd_block_end = ALIGN(vmf->address, PAGE_SIZE << 9);
+		// problem with mmap: Alloc 2MiB, but mmap starts to write to lower end first.
+		// fix: if pmd_block_end is on a 2MiB border, do +1 and align then
+		// BUT that does not really work well, since if first element in stack is accessed, so the highest address in stack, we would end
+		// up in the previous pagetable, which we don't want
+		// ON SECOND THOUGHT, NOT REALLY TRUE; SINCE NORMAL PF HANDLING WOULD RESULT IN SAME THING, align to page and allocate in higher address direction -> TEST AGAIN AFTER CODE BELOW
+		// maybe not needed to fix here, since access behaviour is completely different from stack access behaviour
+
+/*
+		unsigned long pmd_block_end;
+		// TEST TO FIX ALIGNMENT ISSUE
+		if(IS_ALIGNED(vmf->address, (PAGE_SIZE << 9))) {
+		// TODO HANDLE, change PMD range
+			pmd_block_end = ALIGN(vmf->address+1, PAGE_SIZE << 9);
+		}else { 
+			pmd_block_end = ALIGN(vmf->address, PAGE_SIZE << 9);
+		}
 		unsigned long pmd_block_start = ALIGN_DOWN(vmf->address-(IS_ALIGNED(vmf->address, (PAGE_SIZE << 9))?1:0), PAGE_SIZE << 9);
+
+*/
+
+		unsigned long pmd_block_end = ALIGN(vmf->address+(IS_ALIGNED(vmf->address, (PAGE_SIZE << 9))?1:0), PAGE_SIZE << 9);
+		unsigned long pmd_block_start = pmd_block_end + (PAGE_SIZE << 9);
+
 
 
 		if (vmf->address >= (pmd_block_end - (PAGE_SIZE << 2))) {
@@ -4251,6 +4273,10 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 			}
 		}
 
+
+		// TODO: if PF is on upper limit of PMD, then we add 1, therefore placing a order 2 page on the lower end of the following page
+		// could try to check early on if page is on limit, and immediately adding 1, before calculating needed order
+		// or if on pmd limit, subtract 1 
 		unsigned long upper_end = ALIGN(vmf->address+(IS_ALIGNED(vmf->address, (PAGE_SIZE << order))?1:0), PAGE_SIZE << order);
 		unsigned long lower_end = upper_end - (PAGE_SIZE << order);
 		
