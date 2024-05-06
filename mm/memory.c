@@ -4202,136 +4202,19 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	if (!pte)
 		return ERR_PTR(-EAGAIN);
 	/////////////////////////////
-
-	// only do, if we are in a vma marked by my special flag
-	if (vma->vm_flags & VM_SMARTSTACK) {
-		//#define REVERSE
-		#ifdef REVERSE
-		unsigned long pmd_block_end = ALIGN(vmf->address+(IS_ALIGNED(vmf->address, (PAGE_SIZE << 9))?1:0), PAGE_SIZE << 9);
-		unsigned long pmd_block_start = ALIGN_DOWN(vmf->address, PAGE_SIZE << 9);
-
-		if (vmf->address < (pmd_block_start + (PAGE_SIZE << 2))) {
-			order = 2;
-		} else {
-			for (int i = 3; i <= 9; i++) {
-				if (vmf->address < (pmd_block_start + (PAGE_SIZE << i))) {
-					order = i - 1;
-					break;
-				}
-			}
-		}
-
-		unsigned long lower_end = ALIGN_DOWN(vmf->address, PAGE_SIZE<<order); 
-		unsigned long upper_end = lower_end + (PAGE_SIZE << order);
-		#else
-
-
-		/*
-		 * Mark out where the PMD block, or rather the current pagetable address range, where the PF happened
-		 * is located. Get the upper end (highest address) and the start (lowest address).
-		 * In case the pagefault happens on a PMD boundary, we add 1 to the faulting address to get the correct
-		 * pagetable range after alignment. 
-		 */
-		unsigned long pmd_block_end = ALIGN(vmf->address+(IS_ALIGNED(vmf->address, (PAGE_SIZE << 9))?1:0), PAGE_SIZE << 9);
-		unsigned long pmd_block_start = pmd_block_end - (PAGE_SIZE << 9);
-	
-		/*
-		 * Switch to greedy & aggressive default linux mTHP allocation method if we are at the end of the stack.
-		 * Being there means, that all of the previously page tables have been filled with data, or at least 
-		 * have been reserved by array declarations. Because of the guard page it is not possible to install a
-		 * final PMD-sized mTHP in this range, therefore let linux install the biggest possible mTHPs
-		 */	
-		if (pmd_block_start < vma->vm_start) {
-			printk(KERN_WARNING "Reached last page table in stack. Falling back to greedy allocation.\n");
-			goto skip;
-		}
-	
-		/*
-		 * Perform order selection. Check if faulting address is in the current mTHP block. The mTHP blocks are ordered
-		 * the following way (from highest address to lowest address in pagetable range): 2 2 3 4 5 6 7 8
-		 * This means, if a PF happens rather at the beginning of the stack, or of the pagetable range, then a smaller
-		 * mTHP order is chosen. 
-		 * The reason for the >= is, that for PF happening exactly on a mTHP page border between two orders, we want to 
-		 * use the smaller order, which includes the faulting address.
-		 */
-		if (vmf->address >= (pmd_block_end - (PAGE_SIZE << 2))) {
-			order = 2;
-		} else {
-			for (int i = 3; i <= 9; i++) {
-				if (vmf->address >= (pmd_block_end - (PAGE_SIZE << i))) {
-					order = i - 1;
-					break;
-				}
-			}
-		}
-
-		/*
-		 * Calculate upper and lower bounds of the mTHP that is about to be installed.
-		 * Should the faulting address be on a mTHP page border between two order, we previously have chosen the smaller
-		 * order and therefore now also will add 1 to align down to that range. Otherwise we would try to install a smaller
-		 * order page in a range, where the next highest order page would be placed.
-		 */
-		unsigned long upper_end = ALIGN(vmf->address+(IS_ALIGNED(vmf->address, (PAGE_SIZE << order))?1:0), PAGE_SIZE << order);
-		unsigned long lower_end = upper_end - (PAGE_SIZE << order);
-		
-		#endif
-
-		printk(KERN_WARNING "Chosen order:%d\n", order);
-		printk(KERN_WARNING "Faulting address:0x%lx\n", vmf->address);
-		printk(KERN_WARNING "Upper:0x%lx\n", upper_end);
-		printk(KERN_WARNING "Lower:0x%lx\n", lower_end);
-		printk(KERN_WARNING "PMD range upper:0x%lx\n", pmd_block_end);
-		printk(KERN_WARNING "PMD range lower:0x%lx\n", pmd_block_start);
-		printk(KERN_WARNING "vma range upper:0x%lx\n", vma->vm_end);
-		printk(KERN_WARNING "vma range lower:0x%lx\n", vma->vm_start);
-	
-		if(!IS_ALIGNED(lower_end, (PAGE_SIZE << order))) {
-			printk(KERN_WARNING "Lower end not aligned to order!\n");
-		}
-
-		if (upper_end > vma->vm_end) {
-			printk(KERN_WARNING "Bigger than upper end\n");
-			goto skip;
-		}
-		if (lower_end < vma->vm_start) {
-			printk(KERN_WARNING "Smaller than lower end\n");
-			goto skip;
-		}
-		
-		if (!pte_range_none(pte + pte_index(lower_end), 1 << order)) {
-			printk(KERN_WARNING "Page range for order %d not empty!\n",order);
-			goto skip;
-		}
-	
-		/* This code is taken from below. It installs the mTHP */
+	if (vma->vm_flags & VM_SMARTSTACK && vmf->address >= ((ALIGN(vmf->address, PMD_ORDER) - (PAGE_SIZE << 2)))) {
+		order = 2;
 		pte_unmap(pte);
 		gfp = vma_thp_gfp_mask(vma);
-		addr = lower_end;
-		folio = vma_alloc_folio(gfp, order, vma, addr, true);
-		if (folio) {
-			if (mem_cgroup_charge(folio, vma->vm_mm, gfp)) {
-				folio_put(folio);
-				printk(KERN_WARNING
-				       "Mem cgroup if, none of my folios allocated\n");
-				goto skip;
-			}
-			printk(KERN_WARNING
-			       "(MY CODE) Folio has been allocated with order:%d\n",
-			       order);
-			folio_throttle_swaprate(folio, gfp);
-			clear_huge_page(&folio->page, vmf->address, 1 << order);
-			return folio;
-		}
+		addr = ALIGN_DOWN(vmf->address, order);;
+		goto first;
 	}
-
 	/////////////////////////////
-skip:
 	/*
 	 * Find the highest order where the aligned range is completely
 	 * pte_none(). Note that all remaining orders will be completely
 	 * pte_none().
 	 */
-
 	order = highest_order(orders);
 	while (orders) {
 		addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << order);
@@ -4346,6 +4229,7 @@ skip:
 	gfp = vma_thp_gfp_mask(vma);
 	while (orders) {
 		addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << order);
+first:
 		folio = vma_alloc_folio(gfp, order, vma, addr, true);
 		if (folio) {
 			if (mem_cgroup_charge(folio, vma->vm_mm, gfp)) {
@@ -5407,33 +5291,10 @@ retry_pud:
 
 	if (pmd_none(*vmf.pmd) &&
 	    thp_vma_allowable_order(vma, vm_flags, false, true, true, PMD_ORDER)) {
-		/*
-		 * If the PF happens in a vma marked by my flag, check if
-		 * the faulting address is below the first PMD sized block, so
-		 * below the first page table. If no, we can handle it with my
-		 * handling code in alloc_anon_folio. If yes, it means, that
-		 * the first PMD-sized block of memory at the beginning of the stack
-		 * has already been written to / reserved through an array declaration.
-		 * Therefore, we continue doubling the previously allocated mTHP.
-		 * Since the mTHP at the end of the last page table was order 8,
-		 * now we can allocate a order 9 page --> PMD page
-		 * If the faulting address is at e.g. the 3rd PMD block (3rd
-		 * page table block for this vma) we cannot allocate 4MiB, since
-		 * there are no pages of that size. Therefore, we just allocate
-		 * a PMD sized page again.
-		 * If PMD is not suitable to install, ergo if we are in the pagetable
-		 * holding the lowest ptes of the stack, so also were the guard page is,
-		 * we can also enter our pte fault handler 
-		 */
-		if ((vm_flags & VM_SMARTSTACK) && (vmf.address >= (ALIGN_DOWN(vma->vm_end, PMD_SIZE) - PMD_SIZE) ||
-				 !thp_vma_suitable_order(vma, vmf.address, PMD_ORDER))) {
+		// Only if in first pmd block, do pte handling
+		if ((vm_flags & VM_SMARTSTACK) && vmf.address >= ALIGN_DOWN(vma->vm_end, PMD_SIZE) - PMD_SIZE) {
 			return handle_pte_fault(&vmf);
 		}
-
-		if (vm_flags & VM_SMARTSTACK) {
-			printk(KERN_WARNING "Allocated PMD-sized page for VM_SMARTSTACK range\n");
-		}
-
 		ret = create_huge_pmd(&vmf);
 		if (!(ret & VM_FAULT_FALLBACK))
 			return ret;
