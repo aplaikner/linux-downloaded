@@ -1,11 +1,13 @@
 #!/bin/bash
 
-make -j8 CC="ccache gcc" && make modules -j8 CC="ccache gcc" && make modules_install -j8 -s CC="ccache gcc" && cp -v arch/x86_64/boot/bzImage /boot/vmlinuz-linuxNEW
+#make -j8 CC="ccache gcc" && make modules -j8 CC="ccache gcc" && make modules_install -j8 -s CC="ccache gcc" && cp -v arch/x86_64/boot/bzImage /boot/vmlinuz-linuxNEW
 #make -j8 CC="ccache gcc" && cp -v arch/x86_64/boot/bzImage /boot/vmlinuz-linuxNEW
-mkinitcpio -p linuxNEW
-grub-mkconfig -o /boot/grub/grub.cfg
-cp System.map /boot/System.map-linuxNEW
-cp /boot/System.map-linuxNEW /boot/System.map
+make -j8 CC="ccache gcc" && make modules_install -j8 -s CC="ccache gcc" && make install
+
+#mkinitcpio -p linuxNEW
+#grub-mkconfig -o /boot/grub/grub.cfg
+#cp System.map /boot/System.map-linuxNEW
+#cp /boot/System.map-linuxNEW /boot/System.map
 reboot now
 #shutdown now
 
