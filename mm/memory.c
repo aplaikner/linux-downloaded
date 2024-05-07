@@ -4205,12 +4205,8 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 
 	/////////////////////////////
 	if (vma->vm_flags & VM_SMARTSTACK && vmf->address >= (ALIGN_DOWN(vma->vm_end, PMD_ORDER) - (PAGE_SIZE << 2)) && vmf->address < ALIGN_DOWN(vma->vm_end, PMD_ORDER)) {
-		order = 2;
-		pte_unmap(pte);
-		gfp = vma_thp_gfp_mask(vma);
-		addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << order);
+		orders = 0b100;
 		printk(KERN_WARNING "Allocated first page in stack as order 2 successfully\n");
-		goto skip;
 	}
 	/////////////////////////////
 
@@ -4233,7 +4229,6 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	gfp = vma_thp_gfp_mask(vma);
 	while (orders) {
 		addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << order);
-skip:
 		folio = vma_alloc_folio(gfp, order, vma, addr, true);
 		if (folio) {
 			if (mem_cgroup_charge(folio, vma->vm_mm, gfp)) {
