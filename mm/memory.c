@@ -5233,6 +5233,7 @@ unlock:
 static vm_fault_t __handle_mm_fault(struct vm_area_struct *vma,
 		unsigned long address, unsigned int flags)
 {
+
 	struct vm_fault vmf = {
 		.vma = vma,
 		.address = address & PAGE_MASK,
@@ -5246,7 +5247,9 @@ static vm_fault_t __handle_mm_fault(struct vm_area_struct *vma,
 	pgd_t *pgd;
 	p4d_t *p4d;
 	vm_fault_t ret;
-
+	if(vm_flags & VM_SMARTSTACK) {
+		printk(KERN_WARNING "Pagefault at: 0x%lx\n", address);
+	}
 	pgd = pgd_offset(mm, address);
 	p4d = p4d_alloc(mm, pgd, address);
 	if (!p4d)
@@ -5299,7 +5302,9 @@ retry_pud:
 
 		ret = create_huge_pmd(&vmf);
 		if (!(ret & VM_FAULT_FALLBACK)) {
-			printk(KERN_WARNING "Allocated PMD-sized page for VM_SMARTSTACK range\n");
+			if(vm_flags & VM_SMARTSTACK) {
+				printk(KERN_WARNING "Allocated PMD-sized page for VM_SMARTSTACK range\n");
+			}
 			return ret;
 		}
 	} else {
