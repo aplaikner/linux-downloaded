@@ -5434,13 +5434,13 @@ retry_pud:
 			return handle_pte_fault(&vmf);
 		}
 
-		if (vm_flags & VM_SMARTSTACK) {
-			printk(KERN_WARNING "Allocated PMD-sized page for VM_SMARTSTACK range\n");
-		}
-
 		ret = create_huge_pmd(&vmf);
-		if (!(ret & VM_FAULT_FALLBACK))
+		if (!(ret & VM_FAULT_FALLBACK)) {
+			if (vm_flags & VM_SMARTSTACK) {
+				printk(KERN_WARNING "Allocated PMD-sized page for VM_SMARTSTACK range\n");
+			}
 			return ret;
+		}
 	} else {
 		vmf.orig_pmd = pmdp_get_lockless(vmf.pmd);
 
