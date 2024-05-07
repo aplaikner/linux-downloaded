@@ -4186,6 +4186,18 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	if (unlikely(userfaultfd_armed(vma)))
 		goto fallback;
 
+	/////////////////////////////
+	if (vma->vm_flags & VM_SMARTSTACK && vmf->address >= (ALIGN_DOWN(vma->vm_end, PMD_ORDER) - (PAGE_SIZE << 2)) && vmf->address < ALIGN_DOWN(vma->vm_end, PMD_ORDER)) {
+		order = 2;
+		pte_unmap(pte);
+		gfp = vma_thp_gfp_mask(vma);
+		addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << order);
+		printk(KERN_WARNING "Allocated first page in stack as order 2 successfully\n");
+		goto skip;
+	}
+	/////////////////////////////
+
+
 	/*
 	 * Get a list of all the (large) orders below PMD_ORDER that are enabled
 	 * for this vma. Then filter out the orders that can't be allocated over
@@ -4201,16 +4213,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	pte = pte_offset_map(vmf->pmd, vmf->address & PMD_MASK);
 	if (!pte)
 		return ERR_PTR(-EAGAIN);
-	/////////////////////////////
-	if (vma->vm_flags & VM_SMARTSTACK && vmf->address >= (ALIGN_DOWN(vma->vm_end, PMD_ORDER) - (PAGE_SIZE << 2)) && vmf->address < ALIGN_DOWN(vma->vm_end, PMD_ORDER)) {
-		order = 2;
-		pte_unmap(pte);
-		gfp = vma_thp_gfp_mask(vma);
-		addr = ALIGN_DOWN(vmf->address, order);;
-		printk(KERN_WARNING "Allocated first page in stack as order 2 successfully\n");
-		goto first;
-	}
-	/////////////////////////////
+
 	/*
 	 * Find the highest order where the aligned range is completely
 	 * pte_none(). Note that all remaining orders will be completely
@@ -4230,7 +4233,7 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	gfp = vma_thp_gfp_mask(vma);
 	while (orders) {
 		addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << order);
-first:
+skip:
 		folio = vma_alloc_folio(gfp, order, vma, addr, true);
 		if (folio) {
 			if (mem_cgroup_charge(folio, vma->vm_mm, gfp)) {
@@ -4238,7 +4241,7 @@ first:
 				goto next;
 			}
 			if (vma->vm_flags & VM_SMARTSTACK) {
-				printk(KERN_WARNING "Used folio of order: %d\n", order);
+				printk(KERN_WARNING "Used mTHP of order: %d\n", order);
 			}
 			folio_throttle_swaprate(folio, gfp);
 			clear_huge_page(&folio->page, vmf->address, 1 << order);
@@ -5248,7 +5251,7 @@ static vm_fault_t __handle_mm_fault(struct vm_area_struct *vma,
 	p4d_t *p4d;
 	vm_fault_t ret;
 	if(vm_flags & VM_SMARTSTACK) {
-		printk(KERN_WARNING "Pagefault at: 0x%lx\n", address);
+		printk(KERN_WARNING "Pagefault at:0x%lx\n", address);
 	}
 	pgd = pgd_offset(mm, address);
 	p4d = p4d_alloc(mm, pgd, address);
@@ -5295,7 +5298,10 @@ retry_pud:
 
 	if (pmd_none(*vmf.pmd) &&
 	    thp_vma_allowable_order(vma, vm_flags, false, true, true, PMD_ORDER)) {
-		// Only if in first pmd block, do pte handling
+		/*
+		 * If PF occurs in the highest part of stack (highest pagetable), call
+		 * pte fault handler, since we want smart stack behaviour then.
+		 */
 		if ((vm_flags & VM_SMARTSTACK) && vmf.address >= ALIGN_DOWN(vma->vm_end, PMD_SIZE) - PMD_SIZE) {
 			return handle_pte_fault(&vmf);
 		}		
