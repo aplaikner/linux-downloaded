@@ -4186,17 +4186,6 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	if (unlikely(userfaultfd_armed(vma)))
 		goto fallback;
 
-	/////////////////////////////
-	if (vma->vm_flags & VM_SMARTSTACK && vmf->address >= (ALIGN_DOWN(vma->vm_end, PMD_ORDER) - (PAGE_SIZE << 2)) && vmf->address < ALIGN_DOWN(vma->vm_end, PMD_ORDER)) {
-		order = 2;
-		pte_unmap(pte);
-		gfp = vma_thp_gfp_mask(vma);
-		addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << order);
-		printk(KERN_WARNING "Allocated first page in stack as order 2 successfully\n");
-		goto skip;
-	}
-	/////////////////////////////
-
 
 	/*
 	 * Get a list of all the (large) orders below PMD_ORDER that are enabled
@@ -4213,6 +4202,17 @@ static struct folio *alloc_anon_folio(struct vm_fault *vmf)
 	pte = pte_offset_map(vmf->pmd, vmf->address & PMD_MASK);
 	if (!pte)
 		return ERR_PTR(-EAGAIN);
+
+	/////////////////////////////
+	if (vma->vm_flags & VM_SMARTSTACK && vmf->address >= (ALIGN_DOWN(vma->vm_end, PMD_ORDER) - (PAGE_SIZE << 2)) && vmf->address < ALIGN_DOWN(vma->vm_end, PMD_ORDER)) {
+		order = 2;
+		pte_unmap(pte);
+		gfp = vma_thp_gfp_mask(vma);
+		addr = ALIGN_DOWN(vmf->address, PAGE_SIZE << order);
+		printk(KERN_WARNING "Allocated first page in stack as order 2 successfully\n");
+		goto skip;
+	}
+	/////////////////////////////
 
 	/*
 	 * Find the highest order where the aligned range is completely
