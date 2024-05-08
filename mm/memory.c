@@ -5303,6 +5303,8 @@ retry_pud:
 
 		ret = create_huge_pmd(&vmf);
 		if (!(ret & VM_FAULT_FALLBACK)) {
+			printk(KERN_WARNING "VMA start:0x%lx\n", vma->vm_start);
+			printk(KERN_WARNING "VMA   end:0x%lx\n", vma->vm_end);
 			if(vm_flags & VM_SMARTSTACK) {
 				printk(KERN_WARNING "Allocated PMD-sized page for VM_SMARTSTACK range\n");
 			}
